@@ -1,0 +1,87 @@
+// ==============================
+// 1️⃣ Define Chilika Lake region
+// ==============================
+var chilika = ee.Geometry.Polygon([
+  [[85.03, 19.35],
+   [85.03, 19.90],
+   [85.65, 19.90],
+   [85.65, 19.35]]
+]);
+
+Map.centerObject(chilika, 9);
+
+// ======================================
+// 2️⃣ Load Landsat 9 Collection 2 Level 2
+// ======================================
+var dataset = ee.ImageCollection('LANDSAT/LC09/C02/T1_L2')
+  .filterBounds(chilika)
+  .filterDate('2023-01-01', '2023-12-31')
+  .map(function(img) {
+    // Convert DN to surface reflectance
+    var sr = img.select(['SR_B.*']).multiply(0.0000275).add(-0.2);
+    return img.addBands(sr, null, true);
+  })
+  .median()
+  .clip(chilika);
+
+// ===========================
+// 3️⃣ Calculate NDWI
+// ===========================
+var ndwi = dataset.normalizedDifference(['SR_B3', 'SR_B5']).rename('NDWI');
+Map.addLayer(ndwi, {min: -1, max: 1, palette: ['brown', 'blue']}, 'NDWI');
+
+// ==================================
+// 4️⃣ Create binary water mask
+// ==================================
+var waterMask = ndwi.gt(0.3); // threshold
+Map.addLayer(waterMask.updateMask(waterMask), {palette: ['0000FF']}, 'Water Mask');
+
+// =======================================
+// 5️⃣ Convert water mask to vector polygons
+// =======================================
+var waterVectors = waterMask.selfMask().reduceToVectors({
+  geometry: chilika,
+  geometryType: 'polygon',
+  scale: 30,
+  eightConnected: true,
+  maxPixels: 1e13
+});
+
+// =======================================
+// 6️⃣ Filter out very small polygons
+// =======================================
+var minArea = 10000; // 1 hectare in m²
+var filteredWater = waterVectors.map(function(f) {
+  var area = f.geometry().area({maxError: 1});
+  return f.set({'area_m2': area});
+}).filter(ee.Filter.gt('area_m2', minArea));
+
+// ===================================
+// 7️⃣ Calculate area for each polygon
+// ===================================
+var vectorsWithArea = filteredWater.map(function(f) {
+  var areaSqKm = f.geometry().area({maxError: 1}).divide(1e6); // km²
+  var areaHa = f.geometry().area({maxError: 1}).divide(10000); // hectares
+  return f.set({'Area_km2': areaSqKm, 'Area_ha': areaHa});
+});
+
+// ==============================
+// 8️⃣ Display vector polygons
+// ==============================
+Map.addLayer(vectorsWithArea, {color: 'cyan'}, 'Water Polygons');
+
+// ==============================
+// 9️⃣ Print results table
+// ==============================
+print('Detected Water Bodies:', vectorsWithArea);
+
+// ==============================
+// 🔟 Export statistics as CSV
+// ==============================
+Export.table.toDrive({
+  collection: vectorsWithArea,
+  description: 'Chilika_Water_Bodies',
+  fileFormat: 'CSV'
+});
+
+
