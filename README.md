@@ -1,3 +1,2 @@
-# Water-Mapping-Using-NDWI-Of-Chillika-Lake
+<img width="472" height="445" alt="image" src="https://github.com/user-attachments/assets/6f4932b0-80d6-4dc2-9d67-39438b3265e4" /># Water-Mapping-Using-NDWI-Of-Chillika-Lake
 Mapped Chilika Lake water bodies using NDWI in Google Earth Engine. Processed satellite imagery to extract water extent, performed raster analysis, and generated vector layers with area statistics for seasonal monitoring and environmental assessment.
-![Uploading image.png…]()
